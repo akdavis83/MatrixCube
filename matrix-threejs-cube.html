@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Glitch Cube - Three.js</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Share Tech Mono', monospace;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Matrix rain background */
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: radial-gradient(circle at center, #001100 0%, #000 70%);
+        }
+
+        .matrix-rain {
+            position: absolute;
+            top: -100px;
+            color: #00ff00;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            opacity: 0.6;
+            animation: fall linear infinite;
+            text-shadow: 0 0 5px #00ff00;
+            pointer-events: none;
+        }
+
+        @keyframes fall {
+            0% { 
+                transform: translateY(-100vh); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: translateY(100vh); 
+                opacity: 0; 
+            }
+        }
+
+        /* Three.js canvas */
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI Overlay */
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            color: #00ff00;
+            font-family: 'Orbitron', monospace;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            animation: titleGlitch 3s infinite;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.8;
+            animation: textFlicker 2s infinite;
+        }
+
+        @keyframes titleGlitch {
+            0%, 95%, 100% { 
+                transform: translateX(0);
+                filter: none;
+            }
+            96% { 
+                transform: translateX(-2px);
+                filter: hue-rotate(90deg);
+            }
+            97% { 
+                transform: translateX(2px);
+                filter: hue-rotate(180deg);
+            }
+            98% { 
+                transform: translateX(-1px);
+                filter: hue-rotate(270deg);
+            }
+            99% { 
+                transform: translateX(1px);
+                filter: hue-rotate(360deg);
+            }
+        }
+
+        @keyframes textFlicker {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Loading screen */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ff00;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2rem;
+            z-index: 5;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg"></div>
+    
+    <!-- Matrix rain effect -->
+    <div id="matrix-rain-container"></div>
+    
+    <!-- Three.js canvas container -->
+    <div id="canvas-container"></div>
+    
+    <!-- UI Overlay -->
+    <div class="ui-overlay">
+        <div class="title">MATRIX</div>
+        <div class="subtitle">GLITCH CUBE PROTOCOL</div>
+    </div>
+    
+    <!-- Loading indicator -->
+    <div class="loading" id="loading">INITIALIZING MATRIX...</div>
+
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // Matrix rain effect
+        function createMatrixRain() {
+            const container = document.getElementById('matrix-rain-container');
+            const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            
+            for (let i = 0; i < 50; i++) {
+                const column = document.createElement('div');
+                column.className = 'matrix-rain';
+                column.style.left = Math.random() * 100 + '%';
+                column.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                column.style.animationDelay = Math.random() * 2 + 's';
+                
+                let text = '';
+                for (let j = 0; j < 20; j++) {
+                    text += chars[Math.floor(Math.random() * chars.length)] + '<br>';
+                }
+                column.innerHTML = text;
+                
+                container.appendChild(column);
+            }
+        }
+
+        // Three.js scene setup
+        let scene, camera, renderer, cube, glitchMaterial;
+        let time = 0;
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 10, 50);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Cube geometry
+            const geometry = new THREE.BoxGeometry(2, 2, 2);
+
+            // Create glitch material with custom shader
+            const vertexShader = `
+                uniform float time;
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                
+                void main() {
+                    vUv = uv;
+                    vPosition = position;
+                    
+                    vec3 pos = position;
+                    
+                    // Glitch effect
+                    float glitch = sin(time * 10.0 + position.y * 5.0) * 0.1;
+                    pos.x += glitch * sin(time * 15.0);
+                    pos.z += glitch * cos(time * 12.0);
+                    
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                }
+            `;
+
+            const fragmentShader = `
+                uniform float time;
+                uniform vec3 color;
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                
+                void main() {
+                    vec2 uv = vUv;
+                    
+                    // Matrix-style grid
+                    float grid = step(0.9, sin(uv.x * 20.0)) + step(0.9, sin(uv.y * 20.0));
+                    
+                    // Glitch lines
+                    float glitchLine = step(0.98, sin(time * 20.0 + uv.y * 50.0));
+                    
+                    // Pulsing glow
+                    float pulse = sin(time * 3.0) * 0.5 + 0.5;
+                    
+                    // Color mixing
+                    vec3 matrixGreen = vec3(0.0, 1.0, 0.0);
+                    vec3 glitchColor = vec3(1.0, 0.0, 1.0);
+                    
+                    vec3 finalColor = mix(matrixGreen, glitchColor, glitchLine);
+                    finalColor *= (grid + 0.3) * (pulse + 0.5);
+                    
+                    // Add edge glow
+                    float edge = 1.0 - abs(dot(normalize(vPosition), vec3(0.0, 0.0, 1.0)));
+                    finalColor += matrixGreen * edge * 0.5;
+                    
+                    gl_FragColor = vec4(finalColor, 0.8 + pulse * 0.2);
+                }
+            `;
+
+            glitchMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color: { value: new THREE.Color(0x00ff00) }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+
+            // Create cube
+            cube = new THREE.Mesh(geometry, glitchMaterial);
+            scene.add(cube);
+
+            // Add wireframe overlay
+            const wireframeGeometry = new THREE.EdgesGeometry(geometry);
+            const wireframeMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.6
+            });
+            const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+            cube.add(wireframe);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x004400, 0.4);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0x00ff00, 1, 100);
+            pointLight.position.set(5, 5, 5);
+            scene.add(pointLight);
+
+            // Particle system for extra effects
+            createParticles();
+
+            // Hide loading
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function createParticles() {
+            const particleGeometry = new THREE.BufferGeometry();
+            const particleCount = 1000;
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i++) {
+                positions[i] = (Math.random() - 0.5) * 20;
+            }
+
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x00ff00,
+                size: 0.02,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            time += 0.01;
+            
+            // Update shader uniforms
+            if (glitchMaterial) {
+                glitchMaterial.uniforms.time.value = time;
+            }
+            
+            // Rotate cube with glitch
+            if (cube) {
+                cube.rotation.x += 0.01 + Math.sin(time * 5) * 0.005;
+                cube.rotation.y += 0.01 + Math.cos(time * 3) * 0.005;
+                cube.rotation.z += 0.005 + Math.sin(time * 7) * 0.003;
+                
+                // Random glitch movements
+                if (Math.random() < 0.02) {
+                    cube.position.x = (Math.random() - 0.5) * 0.1;
+                    cube.position.y = (Math.random() - 0.5) * 0.1;
+                } else {
+                    cube.position.x *= 0.9;
+                    cube.position.y *= 0.9;
+                }
+            }
+            
+            // Camera movement
+            camera.position.x = Math.sin(time * 0.5) * 0.5;
+            camera.position.y = Math.cos(time * 0.3) * 0.3;
+            camera.lookAt(scene.position);
+            
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initialize everything
+        window.addEventListener('resize', onWindowResize);
+        window.addEventListener('load', () => {
+            createMatrixRain();
+            init();
+            animate();
+        });
+
+        // Add some interactive glitch effects
+        document.addEventListener('click', () => {
+            if (cube) {
+                // Random color glitch on click
+                const colors = [0x00ff00, 0xff0000, 0x0000ff, 0xff00ff, 0x00ffff];
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                glitchMaterial.uniforms.color.value.setHex(randomColor);
+                
+                setTimeout(() => {
+                    glitchMaterial.uniforms.color.value.setHex(0x00ff00);
+                }, 200);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                // Intense glitch effect on spacebar
+                if (cube) {
+                    cube.scale.set(
+                        1 + Math.random() * 0.5,
+                        1 + Math.random() * 0.5,
+                        1 + Math.random() * 0.5
+                    );
+                    
+                    setTimeout(() => {
+                        cube.scale.set(1, 1, 1);
+                    }, 100);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
